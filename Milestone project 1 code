@@ -1,0 +1,298 @@
+package com.example.demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+
+@SpringBootApplication
+@RestController
+public class JobportalApplication {
+
+    private Map<String, User> users = new HashMap<>();
+    private String currentUser = null;
+    private List<Job> jobList = new ArrayList<>();
+    private List<Application> applications = new ArrayList<>();
+
+    public static void main(String[] args) {
+        SpringApplication app = new SpringApplication(JobportalApplication.class);
+        app.setDefaultProperties(
+                Collections.singletonMap("server.port", "8086")
+        );
+        app.run(args);
+    }
+
+    // Constructor → Preload jobs
+    public JobportalApplication() {
+        jobList.add(new Job("TCS", "Java Developer", "Hyderabad", 400000));
+        jobList.add(new Job("Infosys", "Software Engineer", "Bangalore", 500000));
+        jobList.add(new Job("Wipro", "Frontend Developer", "Chennai", 350000));
+        jobList.add(new Job("Amazon", "Backend Developer", "Pune", 800000));
+    }
+
+    // ---------------- HOME ----------------
+    @GetMapping("/")
+    public String home() {
+        return """
+        <html>
+        <head>
+        <style>
+            body { background: linear-gradient(to right,#4facfe,#00f2fe); text-align:center; font-family:Arial; color:white;}
+            a { display:inline-block; margin:10px; padding:10px; background:white; color:black; text-decoration:none; border-radius:5px;}
+        </style>
+        </head>
+        <body>
+            <h2>Job Portal</h2>
+            <a href='/register'>Register</a><br>
+            <a href='/login'>Login</a><br>
+            <a href='/jobs'>Add Job</a><br>
+            <a href='/view'>View Jobs</a>
+        </body>
+        </html>
+        """;
+    }
+
+    // ---------------- REGISTER ----------------
+    @GetMapping("/register")
+    public String registerPage() {
+        return """
+        <html>
+        <head>
+        <style>
+            body { background: linear-gradient(to right,#ff7e5f,#feb47b); text-align:center; }
+            form { background:white; padding:20px; margin:50px auto; width:300px; border-radius:10px; }
+            input,select,button { margin:10px; padding:10px; width:80%; }
+        </style>
+        </head>
+        <body>
+        <form method='post' action='/register'>
+            <h2>Register</h2>
+            Email: <input name='email'/><br>
+            Password: <input type='password' name='password'/><br>
+            Experience:
+            <select name='experience'>
+                <option>Fresher</option>
+                <option>Experienced</option>
+            </select><br>
+            <button type='submit'>Register</button>
+        </form>
+        </body>
+        </html>
+        """;
+    }
+
+    @PostMapping("/register")
+    public String register(@RequestParam String email,
+                           @RequestParam String password,
+                           @RequestParam String experience) {
+
+        users.put(email, new User(email, password, experience));
+        return "<h3>Registered!</h3><a href='/login'>Login</a>";
+    }
+
+    // ---------------- LOGIN ----------------
+    @GetMapping("/login")
+    public String loginPage() {
+        return """
+        <html>
+        <head>
+        <style>
+            body { background: linear-gradient(to right,#43e97b,#38f9d7); text-align:center; }
+            form { background:white; padding:20px; margin:50px auto; width:300px; border-radius:10px; }
+            input,button { margin:10px; padding:10px; width:80%; }
+        </style>
+        </head>
+        <body>
+        <form method='post' action='/login'>
+            <h2>Login</h2>
+            Email: <input name='email'/><br>
+            Password: <input type='password' name='password'/><br>
+            <button type='submit'>Login</button>
+        </form>
+        </body>
+        </html>
+        """;
+    }
+
+    @PostMapping("/login")
+    public String login(@RequestParam String email,
+                        @RequestParam String password) {
+
+        if (users.containsKey(email) &&
+                users.get(email).password.equals(password)) {
+
+            currentUser = email;
+
+            return """
+            <h3>Login Successful!</h3>
+            <a href='/dashboard'>Dashboard</a><br>
+            <a href='/view'>View Jobs</a><br>
+            <a href='/upload'>Upload Resume</a>
+            """;
+        } else {
+            return "<h3>Invalid Login</h3><a href='/login'>Try Again</a>";
+        }
+    }
+
+    // ---------------- DASHBOARD ----------------
+    @GetMapping("/dashboard")
+    public String dashboard() {
+
+        User user = users.get(currentUser);
+
+        long count = applications.stream()
+                .filter(a -> a.email.equals(currentUser))
+                .count();
+
+        return "<h2>Dashboard</h2>"
+                + "<p>User: " + currentUser + "</p>"
+                + "<p>Type: " + user.experience + "</p>"
+                + "<p>Jobs Applied: " + count + "</p>"
+                + "<a href='/view'>View Jobs</a>";
+    }
+
+    // ---------------- ADD JOB PAGE ----------------
+    @GetMapping("/jobs")
+    public String jobs() {
+        return """
+        <html>
+        <head>
+        <style>
+            body { background: linear-gradient(to right,#f7971e,#ffd200); text-align:center; }
+        </style>
+        </head>
+        <body>
+        <h2>Add Job</h2>
+        <form method='post' action='/add'>
+            Company:
+            <select name='company'>
+                <option>TCS</option>
+                <option>Infosys</option>
+                <option>Wipro</option>
+                <option>Google</option>
+                <option>Amazon</option>
+            </select><br>
+
+            Title: <input name='title'/><br>
+            Location: <input name='location'/><br>
+            Salary: <input name='salary'/><br>
+
+            <button type='submit'>Add Job</button>
+        </form>
+        <br>
+        <a href='/view'>View Jobs</a>
+        </body>
+        </html>
+        """;
+    }
+
+    // ---------------- ADD JOB ----------------
+    @PostMapping("/add")
+    public String addJob(@RequestParam String company,
+                         @RequestParam String title,
+                         @RequestParam String location,
+                         @RequestParam double salary) {
+
+        jobList.add(new Job(company, title, location, salary));
+        return "<h3>Job Added!</h3><a href='/jobs'>Back</a>";
+    }
+
+    // ---------------- VIEW JOBS ----------------
+    @GetMapping("/view")
+    public String viewJobs() {
+
+        StringBuilder sb = new StringBuilder("<h2>Job List</h2>");
+
+        for (Job j : jobList) {
+            sb.append("<p>")
+              .append("<b>").append(j.company).append("</b> - ")
+              .append(j.title).append(" - ")
+              .append(j.location).append(" - ₹")
+              .append(j.salary)
+              .append("</p>");
+
+            sb.append("<form method='post' action='/apply'>")
+              .append("<input type='hidden' name='job' value='")
+              .append(j.title)
+              .append("'/>")
+              .append("<button type='submit'>Apply</button>")
+              .append("</form>");
+        }
+
+        sb.append("<br><a href='/'>Home</a>");
+        return sb.toString();
+    }
+
+    // ---------------- APPLY ----------------
+    @PostMapping("/apply")
+    public String apply(@RequestParam String job) {
+
+        applications.add(new Application(currentUser, job));
+
+        return "<h3>Applied Successfully!</h3><a href='/dashboard'>Dashboard</a>";
+    }
+
+    // ---------------- RESUME UPLOAD ----------------
+    @GetMapping("/upload")
+    public String uploadPage() {
+        return """
+        <h2>Upload Resume</h2>
+        <form method='post' action='/upload' enctype='multipart/form-data'>
+            <input type='file' name='file'/><br><br>
+            <button type='submit'>Upload</button>
+        </form>
+        """;
+    }
+
+    @PostMapping("/upload")
+    public String upload(@RequestParam("file") MultipartFile file) throws IOException {
+
+        File folder = new File("uploads");
+        if (!folder.exists()) folder.mkdir();
+
+        file.transferTo(new File("uploads/" + file.getOriginalFilename()));
+
+        return "<h3>Resume Uploaded!</h3><a href='/'>Home</a>";
+    }
+
+    // ---------------- MODELS ----------------
+    static class User {
+        String email;
+        String password;
+        String experience;
+
+        User(String email, String password, String experience) {
+            this.email = email;
+            this.password = password;
+            this.experience = experience;
+        }
+    }
+
+    static class Job {
+        String company;
+        String title;
+        String location;
+        double salary;
+
+        Job(String company, String title, String location, double salary) {
+            this.company = company;
+            this.title = title;
+            this.location = location;
+            this.salary = salary;
+        }
+    }
+
+    static class Application {
+        String email;
+        String jobTitle;
+
+        Application(String email, String jobTitle) {
+            this.email = email;
+            this.jobTitle = jobTitle;
+        }
+    }
+}
